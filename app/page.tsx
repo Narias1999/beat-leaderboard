@@ -1,37 +1,31 @@
 import { Suspense } from 'react'
+import Link from 'next/link'
 import FilterBar from '@/components/FilterBar'
 import SortToggle from '@/components/SortToggle'
 import LeaderboardTable from '@/components/LeaderboardTable'
 import LastSyncedBadge from '@/components/LastSyncedBadge'
-import type { Period, SortField, LeaderboardResponse } from '@/types'
+import { queryLeaderboard } from '@/lib/leaderboard'
+import type { Period, SortField } from '@/types'
 
 interface PageProps {
-  searchParams: { period?: string; sort?: string }
-}
-
-async function getLeaderboard(period: Period, sort: SortField): Promise<LeaderboardResponse> {
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
-  const res = await fetch(
-    `${baseUrl}/api/leaderboard?period=${period}&sort=${sort}`,
-    { next: { revalidate: 300 } }
-  )
-  if (!res.ok) throw new Error(`Leaderboard fetch failed: ${res.status}`)
-  return res.json()
+  searchParams: Promise<{ period?: string; sort?: string }>
 }
 
 const VALID_PERIODS: Period[] = ['all', 'ytd', 'month', 'week']
 const VALID_SORTS: SortField[] = ['distance', 'elevation']
 
 export default async function Home({ searchParams }: PageProps) {
-  const period: Period = VALID_PERIODS.includes(searchParams.period as Period)
-    ? (searchParams.period as Period)
+  const { period: periodParam, sort: sortParam } = await searchParams
+
+  const period: Period = VALID_PERIODS.includes(periodParam as Period)
+    ? (periodParam as Period)
     : 'all'
 
-  const sort: SortField = VALID_SORTS.includes(searchParams.sort as SortField)
-    ? (searchParams.sort as SortField)
+  const sort: SortField = VALID_SORTS.includes(sortParam as SortField)
+    ? (sortParam as SortField)
     : 'distance'
 
-  const data = await getLeaderboard(period, sort)
+  const data = await queryLeaderboard(period, sort)
 
   return (
     <main className="max-w-4xl mx-auto px-4 py-8">
@@ -40,7 +34,15 @@ export default async function Home({ searchParams }: PageProps) {
           <h1 className="text-2xl font-bold text-gray-900">Club Leaderboard</h1>
           <p className="text-sm text-gray-500 mt-1">Strava club activity rankings</p>
         </div>
-        <LastSyncedBadge lastSyncedAt={data.last_synced_at} />
+        <div className="flex items-center gap-3">
+          <LastSyncedBadge lastSyncedAt={data.last_synced_at} />
+          <Link
+            href="/connect"
+            className="text-xs font-medium text-[#FC4C02] hover:text-[#e04400] transition-colors"
+          >
+            Connect
+          </Link>
+        </div>
       </div>
 
       <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-6">

@@ -5,6 +5,10 @@ export interface Athlete {
   firstname: string
   lastname: string
   profile_medium: string | null
+  access_token: string
+  refresh_token: string
+  token_expires_at: number
+  connected_at: string
   updated_at: string
 }
 
@@ -13,10 +17,12 @@ export interface Activity {
   athlete_id: number
   name: string | null
   type: string
-  distance: number           // meters
-  total_elevation_gain: number  // meters
-  moving_time: number        // seconds
-  start_date: string         // ISO 8601 UTC
+  sport_type: string | null
+  distance: number
+  total_elevation_gain: number
+  moving_time: number
+  elapsed_time: number
+  start_date: string
   created_at: string
 }
 
@@ -24,7 +30,7 @@ export interface SyncLog {
   id: number
   synced_at: string
   activities_upserted: number
-  athletes_upserted: number
+  athletes_synced: number
   status: 'success' | 'error'
   error_message: string | null
 }
@@ -40,7 +46,7 @@ export interface LeaderboardEntry {
   firstname: string
   lastname: string
   profile_medium: string | null
-  total_distance_km: number    // already converted from meters
+  total_distance_km: number
   total_elevation_m: number
   activity_count: number
 }
@@ -54,29 +60,26 @@ export interface LeaderboardResponse {
 
 // --- Strava API types ---
 
-export interface StravaClubMember {
+export interface StravaTokenResponse {
+  token_type: string
+  expires_at: number
+  expires_in: number
+  refresh_token: string
+  access_token: string
+  athlete: StravaAthlete
+}
+
+export interface StravaAthlete {
   id: number
-  resource_state: number
   firstname: string
   lastname: string
   profile_medium: string
   profile: string
-  city: string
-  state: string
-  country: string
-  sex: string
-  premium: boolean
 }
 
-export interface StravaClubActivity {
+export interface StravaSummaryActivity {
   id: number
-  resource_state: number
-  athlete: {
-    id: number
-    resource_state: number
-    firstname: string
-    lastname: string
-  }
+  athlete: { id: number }
   name: string
   distance: number
   moving_time: number
@@ -84,28 +87,6 @@ export interface StravaClubActivity {
   total_elevation_gain: number
   type: string
   sport_type: string
-  start_date: string         // ISO 8601 UTC
+  start_date: string
   start_date_local: string
-  timezone: string
-  utc_offset: number
-  achievement_count: number
-  kudos_count: number
-  comment_count: number
-  athlete_count: number
-  photo_count: number
-  trainer: boolean
-  commute: boolean
-  manual: boolean
-  private: boolean
-  flagged: boolean
-  average_speed: number
-  max_speed: number
-}
-
-export interface StravaTokenResponse {
-  token_type: string
-  expires_at: number
-  expires_in: number
-  refresh_token: string
-  access_token: string
 }

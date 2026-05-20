@@ -1,16 +1,48 @@
-import type { StravaClubMember, StravaClubActivity, StravaTokenResponse } from '@/types'
+import type { StravaTokenResponse, StravaSummaryActivity } from '@/types'
 
 const STRAVA_TOKEN_URL = 'https://www.strava.com/oauth/token'
 const STRAVA_API_BASE = 'https://www.strava.com/api/v3'
 
-export async function getStravaAccessToken(): Promise<string> {
+export function getStravaAuthorizeUrl(): string {
+  const params = new URLSearchParams({
+    client_id: process.env.STRAVA_CLIENT_ID!,
+    redirect_uri: `${process.env.NEXT_PUBLIC_APP_URL}/api/auth/strava/callback`,
+    response_type: 'code',
+    scope: 'read,activity:read_all',
+    approval_prompt: 'auto',
+  })
+  return `https://www.strava.com/oauth/authorize?${params}`
+}
+
+export async function exchangeCodeForTokens(code: string): Promise<StravaTokenResponse> {
   const res = await fetch(STRAVA_TOKEN_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
       client_id: process.env.STRAVA_CLIENT_ID!,
       client_secret: process.env.STRAVA_CLIENT_SECRET!,
-      refresh_token: process.env.STRAVA_REFRESH_TOKEN!,
+      code,
+      grant_type: 'authorization_code',
+    }),
+  })
+
+  if (!res.ok) {
+    throw new Error(`Strava token exchange failed: ${res.status} ${await res.text()}`)
+  }
+
+  return res.json()
+}
+
+export async function refreshAccessToken(
+  refreshToken: string
+): Promise<{ access_token: string; refresh_token: string; expires_at: number }> {
+  const res = await fetch(STRAVA_TOKEN_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      client_id: process.env.STRAVA_CLIENT_ID!,
+      client_secret: process.env.STRAVA_CLIENT_SECRET!,
+      refresh_token: refreshToken,
       grant_type: 'refresh_token',
     }),
   })
@@ -19,50 +51,33 @@ export async function getStravaAccessToken(): Promise<string> {
     throw new Error(`Strava token refresh failed: ${res.status} ${await res.text()}`)
   }
 
-  const data: StravaTokenResponse = await res.json()
-  return data.access_token
+  return res.json()
 }
 
-export async function fetchClubMembers(
-  clubId: string,
-  accessToken: string
-): Promise<StravaClubMember[]> {
-  const all: StravaClubMember[] = []
-  let page = 1
-
-  while (true) {
-    const url = `${STRAVA_API_BASE}/clubs/${clubId}/members?per_page=200&page=${page}`
-    const batch = await fetchPage<StravaClubMember>(url, accessToken)
-    all.push(...batch)
-    if (batch.length < 200) break
-    page++
-  }
-
-  return all
+export async function isClubMember(accessToken: string, clubId: string): Promise<boolean> {
+  const res = await fetch(`${STRAVA_API_BASE}/athlete/clubs`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  })
+  if (!res.ok) return false
+  const clubs: { id: number }[] = await res.json()
+  return clubs.some(c => String(c.id) === clubId)
 }
 
-export async function fetchClubActivities(
-  clubId: string,
+export async function fetchAthleteActivities(
   accessToken: string,
-  afterDate: Date | null
-): Promise<StravaClubActivity[]> {
-  const all: StravaClubActivity[] = []
+  after?: number
+): Promise<StravaSummaryActivity[]> {
+  const all: StravaSummaryActivity[] = []
   let page = 1
 
   while (true) {
-    const url = `${STRAVA_API_BASE}/clubs/${clubId}/activities?per_page=200&page=${page}`
-    const batch = await fetchPage<StravaClubActivity>(url, accessToken)
+    let url = `${STRAVA_API_BASE}/athlete/activities?per_page=200&page=${page}`
+    if (after) url += `&after=${after}`
+    console.log(url);
 
+    const batch = await fetchPage<StravaSummaryActivity>(url, accessToken)
     if (batch.length === 0) break
-
-    if (afterDate !== null) {
-      const newActivities = batch.filter(a => new Date(a.start_date) > afterDate)
-      all.push(...newActivities)
-      if (newActivities.length < batch.length) break
-    } else {
-      all.push(...batch)
-    }
-
+    all.push(...batch.filter(a => a.type.toLowerCase().includes('ride')))
     if (batch.length < 200) break
     page++
   }
@@ -76,7 +91,7 @@ async function fetchPage<T>(url: string, accessToken: string): Promise<T[]> {
   })
 
   if (res.status === 401) {
-    throw new Error('Strava access token invalid. Re-run the OAuth flow to get a new refresh token.')
+    throw new Error('Strava access token invalid or expired.')
   }
 
   if (res.status === 429) {
