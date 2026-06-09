@@ -4,8 +4,14 @@ import type { Period, SortField, LeaderboardEntry, LeaderboardResponse } from '@
 export function getDateFilter(period: Period): string {
   const now = new Date()
   switch (period) {
-    case 'week':
-      return new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString()
+    case 'week': {
+      const day = now.getDay()
+      const daysFromMonday = day === 0 ? 6 : day - 1
+      const monday = new Date(now)
+      monday.setDate(now.getDate() - daysFromMonday)
+      monday.setHours(0, 0, 0, 0)
+      return monday.toISOString()
+    }
     case 'month':
       return new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
     case 'ytd':
